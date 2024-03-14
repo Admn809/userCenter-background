@@ -84,7 +84,7 @@ public class UserController {
      * @return 用户信息的集合
      */
     @GetMapping("query")
-    public Result queryUser(String username, HttpServletRequest request) {
+    public Result queryUsers(String username, HttpServletRequest request) {
         /**
          * 鉴权
          */
