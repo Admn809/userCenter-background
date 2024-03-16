@@ -2,6 +2,9 @@ package com.xhy.usercenter.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.xhy.usercenter.common.ErrorCode;
+import com.xhy.usercenter.common.ResultUtils;
+import com.xhy.usercenter.exception.BusinessException;
 import com.xhy.usercenter.service.UserService;
 import com.xhy.usercenter.model.domain.User;
 import com.xhy.usercenter.mapper.UserMapper;
@@ -46,36 +49,54 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
      * @return 用户的id
      */
     @Override
-    public long userRegister(String userAccount, String userPassword, String checkPassword) {
+    public long userRegister(String userAccount, String userPassword, String checkPassword, String planetCode) {
         // 1.校验
         // 三者不为空 -> StringUtils.isAnyBlank() -> commons-lang3
         if (StringUtils.isAnyBlank(userAccount, userPassword, checkPassword)) {
-            return -1;
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数为空");
         }
         // 账号密码的长度
-        if (userAccount.length() < 4 ) {
-            return -1;
+        if ( userAccount.length() < 4 ) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "账号应不小于4位");
         }
-        if (userPassword.length() < 8 || checkPassword.length() < 8) {
-            return -1;
+        if ( userPassword.length() < 8 ) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "密码应不小于8位");
+        }
+        if ( checkPassword.length() < 8 ) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "二次确认应不小于8位");
         }
         // 检验账户的特殊字符
         String validPattern = "[\\n`~!@#$%^&*()+=|{}':;',\\\\[\\\\].<>/?~！@#￥%……&*（）——+|{}【】‘；：”“’。， 、？]";
         Matcher matcher = Pattern.compile(validPattern).matcher(userAccount);
         if (matcher.find()) {
-            return -1;
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "账号包含特殊字符");
         }
         // 校验密码和检验密码
         if (!(checkPassword.equals(userPassword))) {
-            return -1;
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "两次密码不一致");
         }
+        // 检验星球id的合法性
+        if ( planetCode == null || !planetCode.matches("[+-]?\\d*(\\.\\d+)?") ) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "星球id应为纯数字");
+        }
+        if ( planetCode.length() < 2 || planetCode.length() > 5 ) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "星球id长度应为2-5");
+        }
+        // 检验星球id不重复
+        QueryWrapper<User> codeQueryWrapper = new QueryWrapper<>();
+        long count = userMapper.selectCount(check("planetCode", planetCode, codeQueryWrapper));
+        if ( count > 0 ) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "星球id重复");
+        }
+
         // 检验账户不重复
-        QueryWrapper<User> queryWrapper = new QueryWrapper<>();
-        queryWrapper.eq("userAccount", userAccount);
-        long count = userMapper.selectCount(queryWrapper);
-        if (count > 0) { // 大于0说明有重复的account
-            return -1;
+        QueryWrapper<User> userQueryWrapper = new QueryWrapper<>();
+        long userCount = userMapper.selectCount(check("userAccount", userAccount, userQueryWrapper));
+        if ( userCount > 0 ) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户账户重复");
         }
+
+
 
         // 2.加密 -> DigestUtils工具库的方法将密码转换成一个16进制
         String encryptPassword = DigestUtils.md5DigestAsHex((SALT + userPassword).getBytes());
@@ -84,9 +105,10 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         User user = new User();
         user.setUserAccount(userAccount);
         user.setUserPassword(encryptPassword);
+        user.setPlanetCode(planetCode);
         boolean result = this.save(user);
         if (!result) {
-            return -1;
+            throw new BusinessException(ErrorCode.SQL_ERROR, "保存失败，请重试！");
         }
 
         return user.getId();
@@ -106,19 +128,23 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         // 1.校验
         // 检查非空
         if (StringUtils.isAnyBlank(userAccount, userPassword)) {
-            return null;
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "参数为空");
         }
         
         // 账户密码的长度
-        if (userAccount.length() < 4 || userPassword.length() < 8) {
-            return null;
+        if (userAccount.length() < 4 || userAccount.length() > 12) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "账号长度不小于4不超过12");
+        }
+
+        if (userPassword.length() < 8 || userPassword.length() > 16) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "密码长度不小于8不超过16");
         }
         
         // 不包含特殊字符
         String validPattern = "[\\n`~!@#$%^&*()+=|{}':;',\\\\[\\\\].<>/?~！@#￥%……&*（）——+|{}【】‘；：”“’。， 、？]";
         Matcher matcher = Pattern.compile(validPattern).matcher(userAccount);
         if (matcher.find()) {
-            return null;
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "账号包含特殊字符");
         }
         
         // 2.校验账户密码是否正确
@@ -130,7 +156,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         // 用户不存在
         if (user == null) {
             log.info("Login filed, userAccount connot match userPassword...");
-            return null;
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "账号或密码不正确");
         }
 
         // 3.用户脱敏
@@ -142,6 +168,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         return safetyUser;
     }
 
+    /**
+     *
+     * 查询信息
+     *
+     * @param username
+     * @return
+     */
     @Override
     public List<User> queryUserList(String username) {
         QueryWrapper<User> queryWrapper = new QueryWrapper<>();
@@ -176,12 +209,17 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     }
 
 
+    /**
+     * 删除操作——逻辑删除
+     * @param id 用户id
+     * @return
+     */
     @Override
     public int deleteUser(Long id) {
 
         // 先检验
         if (id <= 0) {
-            return 0;
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "id输入错误");
         }
 
 
@@ -193,7 +231,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         // 用户不存在
         if (user == null) {
             log.info("Not find, this user may not exist!");
-            return 0;
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户不存在");
         }
 
         return userMapper.deleteById(id);
@@ -207,21 +245,57 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     @Override
     public User getSafetyUser(User originalUser) {
         if (originalUser == null) {
-            return null;
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "用户不存在");
         }
         User safetyUser = new User();
         safetyUser.setId(originalUser.getId());
         safetyUser.setUsername(originalUser.getUsername());
+        safetyUser.setPlanetCode(originalUser.getPlanetCode());
         safetyUser.setUserAccount(originalUser.getUserAccount());
         safetyUser.setAvatarUrl(originalUser.getAvatarUrl());
         safetyUser.setGender(originalUser.getGender());
         safetyUser.setPhone(originalUser.getPhone());
         safetyUser.setEmail(originalUser.getEmail());
+        safetyUser.setUserStatus(originalUser.getUserStatus());
         safetyUser.setCreateTime(originalUser.getCreateTime());
         safetyUser.setUpdateTime(originalUser.getUpdateTime());
         safetyUser.setUserRole(originalUser.getUserRole());
 
         return safetyUser;
+    }
+
+    /**
+     * 用户注销
+     *
+     * @param request 拿取用户的登录态
+     * @return
+     */
+    @Override
+    public boolean userLogout(HttpServletRequest request) {
+        if (request == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "登录态不存在");
+        }
+
+        // 移除登录态
+        request.getSession().removeAttribute(USER_LOGIN_SESSION);
+        return true;
+    }
+
+    /**
+     *
+     * 检验不重复
+     *
+     * @param user
+     * @return
+     */
+    private QueryWrapper<User> check(String column, String val, QueryWrapper<User> queryWrapper) {
+
+        QueryWrapper<User> eq = queryWrapper.eq(column, val);
+
+        if (eq == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "不存在");
+        }
+        return eq;
     }
 }
 

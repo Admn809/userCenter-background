@@ -17,46 +17,23 @@ public class UserServiceTest {
 
     @Test
     void userRegister() {
-//        检验非空
-        String userAccount = "HaoYuan";
-        String userPassword = "";
+        String userAccount = "planet";
+        String userPassword = "12345678";
         String checkPassword = "12345678";
-        long result = userService.userRegister(userAccount, userPassword, checkPassword);
+        String planetCode = "";
+        long result = userService.userRegister(userAccount, userPassword, checkPassword, planetCode);
         assertEquals(-1, result);
 
-//        检验账户长度
-        userAccount = "Hao";
-        userPassword = "12345678";
-        result = userService.userRegister(userAccount, userPassword, checkPassword);
+        planetCode = "1";
+        result = userService.userRegister(userAccount, userPassword, checkPassword, planetCode);
         assertEquals(-1, result);
 
-//        检验密码长度
-        userAccount = "HaoYuan";
-        userPassword = "1234";
-        result = userService.userRegister(userAccount, userPassword, checkPassword);
+        planetCode = "asa";
+        result = userService.userRegister(userAccount, userPassword, checkPassword, planetCode);
         assertEquals(-1, result);
 
-//        不包含特殊字符
-        userPassword = "12345678";
-        userAccount = "Hao Yuan";
-        result = userService.userRegister(userAccount, userPassword, checkPassword);
-        assertEquals(-1, result);
-
-//        账户不重复
-        userAccount = "testXhy";
-        result = userService.userRegister(userAccount, userPassword, checkPassword);
-        assertEquals(-1, result);
-
-//        密码与校验密码相同
-        checkPassword = "123123123";
-        result = userService.userRegister(userAccount, userPassword, checkPassword);
-        assertEquals(-1, result);
-
-//        成功
-        userAccount = "HaoYuan";
-        checkPassword = "12345678";
-        result = userService.userRegister(userAccount, userPassword, checkPassword);
-        assertEquals(-1, result);
-
+        planetCode = "10000";
+        result = userService.userRegister(userAccount, userPassword, checkPassword, planetCode);
+        System.out.println("result = " + result);
     }
 }

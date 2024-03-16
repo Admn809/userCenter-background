@@ -1,9 +1,12 @@
 package com.xhy.usercenter.controller;
 
+import com.xhy.usercenter.common.ErrorCode;
+import com.xhy.usercenter.exception.BusinessException;
 import com.xhy.usercenter.model.domain.User;
 import com.xhy.usercenter.model.request.UserLoginRequest;
 import com.xhy.usercenter.model.request.UserRegistRequest;
-import com.xhy.usercenter.model.reslut.Result;
+import com.xhy.usercenter.common.Result;
+import com.xhy.usercenter.common.ResultUtils;
 import com.xhy.usercenter.service.UserService;
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
@@ -37,20 +40,23 @@ public class UserController {
      * @return 用户id
      */
     @PostMapping("register")
-    public Result userRegist(@RequestBody UserRegistRequest registRequest) {
+    public Result<Long> userRegist(@RequestBody UserRegistRequest registRequest) {
         if (registRequest == null) {
-            return Result.returnFail("Error!");
+            throw new BusinessException(ErrorCode.NULL_ERROR);
         }
 
         String userAccount = registRequest.getUserAccount();
         String userPassword = registRequest.getUserPassword();
         String checkPassword = registRequest.getCheckPassword();
+        String planetCode = registRequest.getPlanetCode();
 
-        if (StringUtils.isAnyBlank(userAccount, userPassword, checkPassword)) {
-            return Result.returnFail("The account, password or checkpassword cannot be empty!");
+        if (StringUtils.isAnyBlank(userAccount, userPassword, checkPassword, planetCode)) {
+            throw new BusinessException(ErrorCode.NULL_ERROR);
         }
 
-        Result result = Result.returnOk(userService.userRegister(userAccount, userPassword, checkPassword));
+        long resultCode = userService.userRegister(userAccount, userPassword, checkPassword, planetCode);
+
+        Result result = ResultUtils.success(resultCode);
 
         return result;
     }
@@ -64,19 +70,34 @@ public class UserController {
     @PostMapping("login")
     public Result userLogin(@RequestBody UserLoginRequest loginRequest, HttpServletRequest request) {
         if (loginRequest == null) {
-            return Result.returnFail("Error!");
+            throw new BusinessException(ErrorCode.NULL_ERROR);
         }
 
         String userAccount = loginRequest.getUserAccount();
         String userPassword = loginRequest.getUserPassword();
 
         if (StringUtils.isAnyBlank(userAccount, userPassword)) {
-            return Result.returnFail("The account and password cannot be empty!");
+            throw new BusinessException(ErrorCode.NULL_ERROR);
         }
 
-        Result result = Result.returnOk(userService.userLogin(userAccount, userPassword, request));
+        Result result = ResultUtils.success(userService.userLogin(userAccount, userPassword, request));
 
         return result;
+    }
+
+    /**
+     *
+     * 用户注销
+     *
+     * @param request 登录态
+     * @return
+     */
+    @PostMapping("logout")
+    public Result userLogout(HttpServletRequest request) {
+        if (request == null) {
+            throw new BusinessException(ErrorCode.NULL_ERROR);
+        }
+        return ResultUtils.success(userService.userLogout(request));
     }
 
     /**
@@ -90,9 +111,9 @@ public class UserController {
          */
         if (!isAdmin(request)) {
             log.info("This account does not have permissions!");
-            return Result.returnFail("This account does not have permissions!");
+            throw new BusinessException(ErrorCode.NO_AUTH, "非管理员用户！");
         }
-        Result result = Result.returnOk(userService.queryUserList(username));
+        Result result = ResultUtils.success(userService.queryUserList(username));
         return result;
     }
 
@@ -109,17 +130,17 @@ public class UserController {
          */
         if (!isAdmin(request)) {
             log.info("This account does not have permissions!");
-            return Result.returnFail("This account does not have permissions!");
+            throw new BusinessException(ErrorCode.NO_AUTH, "非管理员用户！");
         }
 
         if (id <= 0) {
-            return Result.returnFail("This account does not have permissions!");
+            throw new BusinessException(ErrorCode.NULL_ERROR);
         }
 
         /**
          * mybatis-plus开启逻辑删除配置之后会自动将删除变成更新
          */
-        Result result = Result.returnOk(userService.deleteUser(id));
+        Result result = ResultUtils.success(userService.deleteUser(id));
         return result;
     }
 
@@ -134,7 +155,7 @@ public class UserController {
     public User getCurrentUser(HttpServletRequest request) {
         User currentUser = (User) request.getSession().getAttribute(USER_LOGIN_SESSION);
         if (currentUser == null) {
-            return null;
+            throw new BusinessException(ErrorCode.NULL_ERROR);
         }
         Long currentUserId = currentUser.getId();
         User user = userService.getById(currentUserId);
